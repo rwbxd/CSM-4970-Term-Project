@@ -38,14 +38,23 @@ int interactiveLoop() {
             returnCode = -1;
             break;
         }
+        line[strcspn(line, "\n")] = 0;
+
+        // Check for built-in commands
+        if (strcmp(line, "exit") == 0) {
+            break;
+        }
 
         // Check path for command
-        pathFile = fopen(pathFilename, "r");
-        if (pathFile == NULL) exit(1);
+        pathFile = fopen(pathFilename, "r"); // open pathFile
+        if (pathFile == NULL) { break; } // exit if it didn't open
 
         while ((pathRead = getline(&pathLine, &pathlen, pathFile)) != -1) {
-            potentialPathLine = strcat(pathLine, "/");
-            potentialPathLine = strncat(potentialPathLine, line, nread-1);
+            potentialPathLine = realloc(potentialPathLine, strlen(pathLine) + strlen(line) + 1);
+            strcpy(potentialPathLine, pathLine);
+            potentialPathLine = strcat(potentialPathLine, "/");
+            potentialPathLine = strcat(potentialPathLine, line);
+
 
             if (access(potentialPathLine, X_OK) != -1) {
                 pathFlag = true;
@@ -69,10 +78,7 @@ int interactiveLoop() {
             int status;
             waitpid(childPID, &status, 0);
         }
-        
 
-
-        //fprintf(stdout, "%s", line);
     }
 
     free(line);
