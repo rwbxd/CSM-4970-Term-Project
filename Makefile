@@ -2,7 +2,7 @@ all: wish
 .PHONY: all
 
 wish:
-	gcc wish.c -o wish
+	gcc -g wish.c -o wish
 
 clean:
 	rm -f wish
