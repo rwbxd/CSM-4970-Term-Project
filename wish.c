@@ -50,7 +50,7 @@ int interactiveLoop() {
         if (pathFile == NULL) { break; } // exit if it didn't open
 
         while ((pathRead = getline(&pathLine, &pathlen, pathFile)) != -1) {
-            potentialPathLine = realloc(potentialPathLine, strlen(pathLine) + strlen(line) + 1);
+            potentialPathLine = realloc(potentialPathLine, strlen(pathLine) + strlen(line) + 2); // +2 for "/" and "/0"
             strcpy(potentialPathLine, pathLine);
             potentialPathLine = strcat(potentialPathLine, "/");
             potentialPathLine = strcat(potentialPathLine, line);
