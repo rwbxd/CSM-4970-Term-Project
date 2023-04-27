@@ -7,8 +7,22 @@
 #include <sys/wait.h>
 #include <sys/types.h>
 
+// Path linked list
+struct pathEntry {
+    char* path;
+    size_t len;
+    struct pathEntry* next;
+};
+
+// Args linked list
+struct argEntry {
+    char* arg;
+    struct argEntry* next;
+};
+
 // Global variable definition
-char* pathFilename;
+struct pathEntry* pathHead = NULL;
+struct argEntry* argHead = NULL;
 
 // Function predeclaration
 int setupPath();
@@ -21,7 +35,6 @@ int main(int argc, char* argv[]) {
     if (argc == 1) {
         exit(interactiveLoop());
     }
-    free(pathFilename);
 }
 
 int interactiveLoop() {
@@ -30,37 +43,45 @@ int interactiveLoop() {
     ssize_t nread;
     int returnCode = 0;
 
-    FILE* pathFile;
-    char* pathLine = NULL;
-    char* potentialPathLine = NULL;
-    size_t pathlen = 0;
-    ssize_t pathRead;
-    bool pathFlag = false;
-
-    while (1) {
+    while (1) { // main loop
         fprintf(stdout, "wish> ");
-        nread = getline(&line, &len, stdin);
+        nread = getline(&line, &len, stdin); // get input line, write to line var
         if (nread == -1) {
             returnCode = -1;
             fprintf(stdout, "Failed to get input line, exiting.\n");
             break;
         }
 
-        char* tmpArgs[8]; // TODO: Dynamically allocate args array
+        while (argHead != NULL) { // clear previous args    
+            struct argEntry* next = argHead->next; 
+            free(argHead);
+            argHead = next;
+        }
+
+        struct argEntry* curArg = (struct argEntry*) malloc(sizeof(struct argEntry));
+        argHead = curArg;
         char* token;
         char* saveptr;
         const char* WHITESPACE = " \n";
-        for (int tmpArg = 0; tmpArg < 8; tmpArg++) tmpArgs[tmpArg] = NULL;
-        for (int j = 0; ; j++, line = NULL) { // while loop in disguise
-            token = strtok_r(line, WHITESPACE, &saveptr);
-            if (token == NULL) break;
-            tmpArgs[j] = token;
-        }
-        int argc = 0;
-        for (int i = 0; i < 8 && tmpArgs[i] != NULL; i++) argc++;
+        int argc = -1;
+        do {
+            argc++;
+            // TODO: Fix wasted entry when token is null?
+            token = strtok_r(line, WHITESPACE, &saveptr); // get a token from the line, delimited by whitespace
+            curArg->arg = token;
+            curArg->next = (struct argEntry*) malloc(sizeof(struct argEntry));
+            curArg = curArg->next;
+            curArg->next = NULL;
+            line = NULL;
+        } while (token != NULL);
 
+        // flatten linked list of variable size to array for use with execv
         char* args[argc + 1];
-        for (int i = 0; i < argc; i++) args[i] = tmpArgs[i];
+        curArg = argHead;
+        for (int i = 0; i < argc; i++) {
+            args[i] = curArg->arg;
+            curArg = curArg->next;
+        };
         args[argc] = NULL;
 
         char* COMMAND = args[0];
@@ -68,7 +89,7 @@ int interactiveLoop() {
         // Check for built-in commands
         if (strcmp(COMMAND, "exit") == 0) {
             break;
-        } else if (strcmp(COMMAND, "cd") == 0) {
+        } else if (strcmp(COMMAND, "cd") == 0) { // TODO: dir in quotes
             if (argc == 1) fprintf(stdout, "cd: requires a directory (cd dir)\n");
             else if (argc > 2) fprintf(stdout, "cd: too many arguments\n");
             else {
@@ -77,31 +98,43 @@ int interactiveLoop() {
                 }
             }
             continue; // reset shell
+        } else if (strcmp(COMMAND, "path") ==  0) {
+            while (pathHead != NULL) {
+                struct pathEntry* next = pathHead->next;
+                free(pathHead);
+                pathHead = next;
+            }
+            struct pathEntry* cur;
+            if (argc > 1) {
+                cur = (struct pathEntry*) malloc(sizeof(struct pathEntry));
+                cur->path = args[1];
+                cur->len = strlen(cur->path);
+                pathHead = cur;
+            }
+            for (int arg = 2; arg < argc; arg++) {
+                cur->next = (struct pathEntry*) malloc(sizeof(struct pathEntry));
+                cur = cur->next;
+                cur->path = args[arg];
+                cur->len = strlen(cur->path);
+                cur->next = NULL;
+            }
+            continue;
         }
 
-        // Check path for command
-        //if (pathFile == NULL) {
-            pathFile = fopen(pathFilename, "r"); // open pathFile
-            if (pathFile == NULL) {
-                fprintf(stdout, "Failed to open pathfile.\n");
-                break; // exit if it didn't open
-            } 
-        //}
-
-        while ((pathRead = getline(&pathLine, &pathlen, pathFile)) != -1) {
-            potentialPathLine = realloc(potentialPathLine, strlen(pathLine) + strlen(COMMAND) + 2); // +2 for "/" and "/0"
-            strcpy(potentialPathLine, pathLine);
+        // else, try finding a command in path
+        char* potentialPathLine = NULL;
+        struct pathEntry* curPathEntry = pathHead;
+        while (curPathEntry != NULL) {
+            potentialPathLine = realloc(potentialPathLine, curPathEntry->len + strlen(COMMAND) + 2); // +2 for "/" and "/0"
+            strcpy(potentialPathLine, curPathEntry->path);
             potentialPathLine = strcat(potentialPathLine, "/");
             potentialPathLine = strcat(potentialPathLine, COMMAND);
 
-
-            if (access(potentialPathLine, X_OK) != -1) {
-                pathFlag = true;
-                break;
-            }
+            if (access(potentialPathLine, X_OK) != -1) { break; } // found path
+            else { curPathEntry = curPathEntry->next; } // didn't find path, try next entry
         }
 
-        if (!pathFlag) {
+        if (curPathEntry == NULL) { // exhausted all entries
             fprintf(stdout, "Command not found.\n");
             continue; // reset shell
         } else {
@@ -120,37 +153,37 @@ int interactiveLoop() {
         }
     }
 
-    if (pathFile != NULL) fclose(pathFile);
     free(line);
-    free(pathLine);
-    free(potentialPathLine);
+    //free(potentialPathLine);
     return returnCode;
 }
 
 int setupPath() {
-    // https://pubs.opengroup.org/onlinepubs/9699919799/functions/getcwd.html
-    size_t size; // size of path
-    char* pathFile = "/wishPATH";
+    FILE* pathFile = fopen("wishPATH", "r"); // open pathFile
+    if (pathFile == NULL) {
+        fprintf(stdout, "Failed to open pathfile.\n");
+        return -1; // exit if it didn't open
+    }
 
-    // set initial path size
-    long path_max = pathconf(".", _PC_PATH_MAX);
-    if (path_max == -1) size = 1024;
-    else if (path_max > 10240) size = 10240;
-    else size = path_max;
+    char* pathLine = NULL;
+    char* potentialPathLine = NULL;
+    size_t pathlen = 0;
+    ssize_t pathRead;
 
-    char* buf;
-    char* ptr;
-    for (buf = ptr = NULL; ptr == NULL; size *= 2) { // Double size until we don't get not enough memory error
-        if ((buf = realloc(buf, size + strlen(pathFile))) == NULL) {
-            return 1; // error
-        }
-
-        ptr = getcwd(buf, size - strlen(pathFile));
-        if (ptr == NULL && errno != ERANGE) {
-            return 1; // error
+    struct pathEntry* cur;
+    while ((pathRead = getline(&pathLine, &pathlen, pathFile)) != -1) {
+        struct pathEntry* new = (struct pathEntry*) malloc(sizeof(struct pathEntry));
+        new->path = pathLine;
+        new->len = strlen(new->path);
+        if (pathHead == NULL) {
+            pathHead = new;
+            cur = new;
+        } else {
+            cur->next = new;
+            cur = cur->next;
         }
     }
 
-    strcat(buf, pathFile);
-    pathFilename = buf;
+    fclose(pathFile);
+    return 0;
 }
