@@ -1,7 +1,7 @@
 all: wish
 .PHONY: all
 
-wish:
+wish: wish.c
 	gcc -g wish.c -o wish
 
 clean:
