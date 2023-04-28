@@ -36,8 +36,11 @@ int main(int argc, char* argv[]) {
     if (setupPath() == -1) {
         fprintf(stdout, "Error getting path ready. Things will likely not work right!\n");
     }
+
     if (argc == 1) {
         exit(interactiveLoop());
+    } else {
+        exit(/*batchLoop()*/0);
     }
 }
 
@@ -48,7 +51,7 @@ int interactiveLoop() {
     ssize_t nread;
     int returnCode = 0;
 
-    while (1) { // main loop
+    while (isAChild == false) { // main loop -- 
         free(line);
         line = NULL;
         free(potentialPathLine);
@@ -94,7 +97,7 @@ int interactiveLoop() {
                     argHead = curArg;
                     argc = 0;
                     token = strtok_r(line, WHITESPACE, &saveptr); // get a token from the line, delimited by whitespace
-                    continue;
+                    continue; // go back to while(token != NULL), start parsing
                 } else { // parent
                     break; // run commands held so far
                 }
@@ -112,7 +115,7 @@ int interactiveLoop() {
         if (argc == 0) {
             free(curArg);
             argHead = NULL; // manually clear argHead to prevent double free
-            if (isAChild) exit(1); else continue; // reset shell or exit
+            continue; // reset shell or exit
         }
 
         // flatten linked list of variable size to array for use with execv
@@ -137,7 +140,7 @@ int interactiveLoop() {
                     fprintf(stdout, "cd: chdir failed\n");
                 }
             }
-            if (isAChild) exit(1); else continue; // reset shell or exit
+            continue; // reset shell or exit
         } else if (strcmp(COMMAND, "path") ==  0) {
             while (pathHead != NULL) {
                 struct pathEntry* next = pathHead->next;
@@ -158,7 +161,7 @@ int interactiveLoop() {
                 cur->len = strlen(cur->path);
                 cur->next = NULL;
             }
-            if (isAChild) exit(1); else continue; // reset shell or exit
+            continue; // reset shell or exit
         }
 
         // else, try finding a command in path
@@ -175,12 +178,10 @@ int interactiveLoop() {
 
         if (curPathEntry == NULL) { // exhausted all entries
             fprintf(stdout, "Command not found.\n");
-            if (isAChild) exit(1); else continue; // reset shell or exit
+            continue; // reset shell or exit
         } else {
             args[0] = potentialPathLine;
         }
-
-
 
         int execChildPID = fork();
         if (execChildPID == 0) {
@@ -201,9 +202,6 @@ int interactiveLoop() {
         if (redirectionFile != -1) close(redirectionFile);
         int status;
         if (argChildPID != 0) waitpid(argChildPID, &status, 0);
-        if (isAChild) exit(1); else continue; // reset shell or exit
-
-        
     }
 
     return returnCode;
