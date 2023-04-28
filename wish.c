@@ -77,7 +77,7 @@ int interactiveLoop() {
         while (token != NULL) {
             if (strcmp(token, ">") == 0) {
                 token = strtok_r(line, WHITESPACE, &saveptr); // get a token from the line, delimited by whitespace
-                redirectionFile = open(/*file:*/token, /*options:*/O_WRONLY | O_CREAT, /*file perms:*/0222);
+                redirectionFile = open(/*file:*/token, /*options:*/O_RDWR | O_CREAT, /*file perms:*/00777);
                 if (redirectionFile == -1) fprintf(stdout, "Failed to open redirection file, stdout will be used.");
                 break;
             } else if (strcmp(token, "&") == 0) {
