@@ -6,6 +6,7 @@ wish: wish.c
 
 clean:
 	rm -f wish
+	rm -f *.output.txt
 .PHONY: clean
 
 remake: clean all

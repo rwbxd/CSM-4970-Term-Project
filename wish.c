@@ -1,4 +1,5 @@
 #include <errno.h>
+#include <fcntl.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -23,6 +24,7 @@ struct argEntry {
 // Global variable definition
 struct pathEntry* pathHead = NULL;
 struct argEntry* argHead = NULL;
+int redirectionFile = -1;
 
 // Function predeclaration
 int setupPath();
@@ -71,6 +73,16 @@ int interactiveLoop() {
         int argc = 0;
         token = strtok_r(line, WHITESPACE, &saveptr); // get a token from the line, delimited by whitespace
         while (token != NULL) {
+            if (strcmp(token, ">") == 0) {
+                token = strtok_r(line, WHITESPACE, &saveptr); // get a token from the line, delimited by whitespace
+                redirectionFile = open(/*file:*/token, /*options:*/O_WRONLY | O_CREAT, /*file perms:*/0222);
+                if (redirectionFile == -1) fprintf(stdout, "Failed to open redirection file, stdout will be used.");
+                break;
+            } else if (strcmp(token, "&") == 0) {
+                printf("Hit &\n");
+                break;
+            }
+
             argc++;
             curArg->arg = token;
             curArg->next = (struct argEntry*) malloc(sizeof(struct argEntry));
@@ -151,8 +163,15 @@ int interactiveLoop() {
             args[0] = potentialPathLine;
         }
 
+
+
         int childPID = fork();
         if (childPID == 0) {
+            if (redirectionFile != -1) {
+                dup2(redirectionFile, STDOUT_FILENO); // pipe stdout to file
+                dup2(redirectionFile, STDERR_FILENO); // pipe stderr to file
+                close(redirectionFile); // not needed after duping fp
+            }
             if (execv(args[0], args) == -1) {
                 fprintf(stdout, "Error in execution :(\n");
             }
@@ -161,6 +180,8 @@ int interactiveLoop() {
             int status;
             waitpid(childPID, &status, 0);
         }
+
+        if (redirectionFile != -1) close(redirectionFile);
     }
 
     return returnCode;
