@@ -25,6 +25,8 @@ struct argEntry {
 struct pathEntry* pathHead = NULL;
 struct argEntry* argHead = NULL;
 int redirectionFile = -1;
+int argChildPID = 0;
+bool isAChild = false;
 
 // Function predeclaration
 int setupPath();
@@ -79,8 +81,23 @@ int interactiveLoop() {
                 if (redirectionFile == -1) fprintf(stdout, "Failed to open redirection file, stdout will be used.");
                 break;
             } else if (strcmp(token, "&") == 0) {
-                printf("Hit &\n");
-                break;
+                argChildPID = fork();
+                if (argChildPID == 0) { // child
+                    isAChild = true;
+                    struct argEntry* curArg = argHead;
+                    while (curArg != NULL) { // clear args
+                        argHead = argHead->next;
+                        free(curArg);
+                        curArg = argHead;
+                    }
+                    curArg = (struct argEntry*) malloc(sizeof(struct argEntry));
+                    argHead = curArg;
+                    argc = 0;
+                    token = strtok_r(line, WHITESPACE, &saveptr); // get a token from the line, delimited by whitespace
+                    continue;
+                } else { // parent
+                    break; // run commands held so far
+                }
             }
 
             argc++;
@@ -95,7 +112,7 @@ int interactiveLoop() {
         if (argc == 0) {
             free(curArg);
             argHead = NULL; // manually clear argHead to prevent double free
-            continue; // next iteration for empty
+            if (isAChild) exit(1); else continue; // reset shell or exit
         }
 
         // flatten linked list of variable size to array for use with execv
@@ -120,7 +137,7 @@ int interactiveLoop() {
                     fprintf(stdout, "cd: chdir failed\n");
                 }
             }
-            continue; // reset shell
+            if (isAChild) exit(1); else continue; // reset shell or exit
         } else if (strcmp(COMMAND, "path") ==  0) {
             while (pathHead != NULL) {
                 struct pathEntry* next = pathHead->next;
@@ -141,7 +158,7 @@ int interactiveLoop() {
                 cur->len = strlen(cur->path);
                 cur->next = NULL;
             }
-            continue;
+            if (isAChild) exit(1); else continue; // reset shell or exit
         }
 
         // else, try finding a command in path
@@ -158,15 +175,15 @@ int interactiveLoop() {
 
         if (curPathEntry == NULL) { // exhausted all entries
             fprintf(stdout, "Command not found.\n");
-            continue; // reset shell
+            if (isAChild) exit(1); else continue; // reset shell or exit
         } else {
             args[0] = potentialPathLine;
         }
 
 
 
-        int childPID = fork();
-        if (childPID == 0) {
+        int execChildPID = fork();
+        if (execChildPID == 0) {
             if (redirectionFile != -1) {
                 dup2(redirectionFile, STDOUT_FILENO); // pipe stdout to file
                 dup2(redirectionFile, STDERR_FILENO); // pipe stderr to file
@@ -178,10 +195,15 @@ int interactiveLoop() {
             exit(1);
         } else {
             int status;
-            waitpid(childPID, &status, 0);
+            waitpid(execChildPID, &status, 0);
         }
 
         if (redirectionFile != -1) close(redirectionFile);
+        int status;
+        if (argChildPID != 0) waitpid(argChildPID, &status, 0);
+        if (isAChild) exit(1); else continue; // reset shell or exit
+
+        
     }
 
     return returnCode;
