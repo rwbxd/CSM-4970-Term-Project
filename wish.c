@@ -39,11 +39,16 @@ int main(int argc, char* argv[]) {
 
 int interactiveLoop() {
     char* line = NULL;
+    char* potentialPathLine = NULL;
     size_t len = 0;
     ssize_t nread;
     int returnCode = 0;
 
     while (1) { // main loop
+        free(line);
+        line = NULL;
+        free(potentialPathLine);
+        potentialPathLine = NULL;
         fprintf(stdout, "wish> ");
         nread = getline(&line, &len, stdin); // get input line, write to line var
         if (nread == -1) {
@@ -63,17 +68,23 @@ int interactiveLoop() {
         char* token;
         char* saveptr;
         const char* WHITESPACE = " \n";
-        int argc = -1;
-        do {
+        int argc = 0;
+        token = strtok_r(line, WHITESPACE, &saveptr); // get a token from the line, delimited by whitespace
+        while (token != NULL) {
             argc++;
-            // TODO: Fix wasted entry when token is null?
-            token = strtok_r(line, WHITESPACE, &saveptr); // get a token from the line, delimited by whitespace
             curArg->arg = token;
             curArg->next = (struct argEntry*) malloc(sizeof(struct argEntry));
             curArg = curArg->next;
             curArg->next = NULL;
             line = NULL;
-        } while (token != NULL);
+            token = strtok_r(line, WHITESPACE, &saveptr); // get a token from the line, delimited by whitespace
+        }
+
+        if (argc == 0) {
+            free(curArg);
+            argHead = NULL; // manually clear argHead to prevent double free
+            continue; // next iteration for empty
+        }
 
         // flatten linked list of variable size to array for use with execv
         char* args[argc + 1];
@@ -122,7 +133,6 @@ int interactiveLoop() {
         }
 
         // else, try finding a command in path
-        char* potentialPathLine = NULL;
         struct pathEntry* curPathEntry = pathHead;
         while (curPathEntry != NULL) {
             potentialPathLine = realloc(potentialPathLine, curPathEntry->len + strlen(COMMAND) + 2); // +2 for "/" and "/0"
@@ -153,8 +163,6 @@ int interactiveLoop() {
         }
     }
 
-    free(line);
-    //free(potentialPathLine);
     return returnCode;
 }
 
