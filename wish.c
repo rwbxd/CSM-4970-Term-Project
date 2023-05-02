@@ -76,8 +76,6 @@ int batchLoop(char* filename) {
     if (file == NULL) {
         fprintf(stdout, "Failed to open file.\n");
         return -1; // exit if it didn't open
-    } else {
-        printf("file read.\n");
     }
 
     char* line = NULL;
