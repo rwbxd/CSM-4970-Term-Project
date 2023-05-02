@@ -20,3 +20,9 @@ wish> ls & ls & ls
 wish> ls & ls -l & ls
 wish> ls & sleep 5 & ls
 ```
+
+### Make and run the batch shell
+```
+make
+./wish examplebatch.txt
+```
