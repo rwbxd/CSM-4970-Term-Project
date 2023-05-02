@@ -1,0 +1,10 @@
+echo Running example batch execution
+echo -------------------------------
+echo Running ls:
+echo
+ls
+echo -------------------------------
+echo Running ls -l:
+echo
+ls -l
+echo -------------------------------
