@@ -51,7 +51,7 @@ int interactiveLoop() {
     int nread = -1;
     int returnCode;
 
-    while (isAChild == false) { // main loop -- 
+    while (isAChild == false) { // main loop -- isAChild is a global variable
         free(line);
         line = NULL;
         fprintf(stdout, "wish> ");
@@ -62,9 +62,10 @@ int interactiveLoop() {
             return -1;
         }
 
-        int returnCode = parseAndExecute(line);
+        returnCode = parseAndExecute(line);
         //printf("%d\n", returnCode);
-        if (returnCode == -5) return -5;
+        if (isAChild) return 0;
+        if (returnCode != 0) return returnCode; // nonzero return code = exit code or error code
         // else continue to next iteration
     }
 
@@ -191,7 +192,7 @@ int parseAndExecute(char* line) {
 
     // Check for built-in commands
     if (strcmp(COMMAND, "exit") == 0) {
-        return -5;
+        return 1;
     } else if (strcmp(COMMAND, "cd") == 0) { // TODO: dir in quotes
         if (argc == 1) fprintf(stdout, "cd: requires a directory (cd dir)\n");
         else if (argc > 2) fprintf(stdout, "cd: too many arguments\n");
@@ -254,7 +255,7 @@ int parseAndExecute(char* line) {
     int status;
     if (argChildPID != 0) waitpid(argChildPID, &status, 0);
 
-    if (isAChild) return -2;
+    return 0;
 }
 
 int executeCommand(char* args[]) {
